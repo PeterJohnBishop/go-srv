@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/mdp/qrterminal/v3"
 	"github.com/skip2/go-qrcode"
 	"github.com/xlzd/gotp"
 )
@@ -104,29 +102,24 @@ func (c *Client) writePump() {
 	}
 }
 
-func generateTOTPWithSecret(clientId string, clientSecret string) {
-	// for displaying in the chat or sending via email
+// generate a QR code for TOTP to send as a PNG
+func generateTOTPWithSecret(clientId string, clientSecret string) ([]byte, error) {
 	totp := gotp.NewDefaultTOTP(clientSecret)
 
 	uri := totp.ProvisioningUri(clientId, "encryptedMessanger")
 
-	qrcode.WriteFile(uri, qrcode.Medium, 256, "qr.png")
+	png, err := qrcode.Encode(uri, qrcode.Medium, 256)
+	if err != nil {
+		return nil, err
+	}
 
-	// for writing in the terminal, alternatively generate a PNG
-	qrterminal.GenerateWithConfig(uri, qrterminal.Config{
-		Level:     qrterminal.L,
-		Writer:    os.Stdout,
-		BlackChar: qrterminal.BLACK,
-		WhiteChar: qrterminal.WHITE,
-	})
-
-	fmt.Println("\nScan the QR code with your authenticator app to send me a Direct Message")
+	return png, nil
 }
 
+// verify incomming OTP
 func verifyOTP(randomSecret string, otp string) {
 	totp := gotp.NewDefaultTOTP(randomSecret)
 
-	// Validate the provided OTP
 	if totp.Verify(otp, time.Now().Unix()) {
 		fmt.Println("Authentication successful! Access granted.")
 	} else {
