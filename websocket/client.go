@@ -2,25 +2,23 @@ package websocket
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
-	"github.com/gin-gonic/gin" // Import Gin
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/mdp/qrterminal/v3"
+	"github.com/skip2/go-qrcode"
+	"github.com/xlzd/gotp"
 )
 
 const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 512
 )
 
@@ -33,22 +31,19 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins (adjust for production!)
+		return true
 	},
 }
 
-// Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub *Hub
-
-	// The websocket connection.
-	conn *websocket.Conn
-
-	// Buffered channel of outbound messages.
-	send chan []byte
+	id     string
+	name   string
+	secret string
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
 }
 
-// readPump pumps messages from the websocket connection to the hub for the client to read.
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
@@ -70,7 +65,6 @@ func (c *Client) readPump() {
 	}
 }
 
-// writePump sends messages from the hub to the websocket connection to be broadcast.
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -92,7 +86,6 @@ func (c *Client) writePump() {
 			}
 			w.Write(message)
 
-			// Add queued chat messages to the current websocket message.
 			n := len(c.send)
 			for i := 0; i < n; i++ {
 				w.Write(newline)
@@ -111,7 +104,36 @@ func (c *Client) writePump() {
 	}
 }
 
-// ServeWs handles websocket requests from the peer.
+func generateTOTPWithSecret(clientId string, clientSecret string) {
+	// for displaying in the chat or sending via email
+	totp := gotp.NewDefaultTOTP(clientSecret)
+
+	uri := totp.ProvisioningUri(clientId, "encryptedMessanger")
+
+	qrcode.WriteFile(uri, qrcode.Medium, 256, "qr.png")
+
+	// for writing in the terminal, alternatively generate a PNG
+	qrterminal.GenerateWithConfig(uri, qrterminal.Config{
+		Level:     qrterminal.L,
+		Writer:    os.Stdout,
+		BlackChar: qrterminal.BLACK,
+		WhiteChar: qrterminal.WHITE,
+	})
+
+	fmt.Println("\nScan the QR code with your authenticator app to send me a Direct Message")
+}
+
+func verifyOTP(randomSecret string, otp string) {
+	totp := gotp.NewDefaultTOTP(randomSecret)
+
+	// Validate the provided OTP
+	if totp.Verify(otp, time.Now().Unix()) {
+		fmt.Println("Authentication successful! Access granted.")
+	} else {
+		fmt.Println("Authentication failed! Invalid OTP.")
+	}
+}
+
 func ServeWs(hub *Hub, c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -119,11 +141,26 @@ func ServeWs(hub *Hub, c *gin.Context) {
 		return
 	}
 
-	// Create a new client and register it with the hub
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	id := c.GetHeader("X-Client-Id")
+	if id == "" {
+		log.Println("Identifying header is missing.")
+		return
+	}
+
+	secret := c.GetHeader("X-Client-Secret")
+	if secret == "" {
+		log.Println("Shared secret header is missing.")
+	}
+
+	name := c.Param("name")
+	if name == "" {
+		log.Println("Display name is missing.")
+		return
+	}
+
+	client := &Client{id: id, name: name, secret: secret, hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client
 
-	// new goroutines for reading and writing
 	go client.writePump()
 	go client.readPump()
 }

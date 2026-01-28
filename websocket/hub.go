@@ -1,19 +1,11 @@
 package websocket
 
-// Hub maintains the set of active clients and broadcasts messages to the
-// clients.
 type Hub struct {
-	// Registered clients.
-	clients map[*Client]bool
-
-	// Inbound messages from the clients.
-	broadcast chan []byte
-
-	// Register requests from the clients.
-	register chan *Client
-
-	// Unregister requests from clients.
-	unregister chan *Client
+	clients       map[*Client]bool
+	broadcast     chan []byte
+	register      chan *Client
+	unregister    chan *Client
+	broadcastKeys []map[string]string
 }
 
 func NewHub() *Hub {
@@ -29,6 +21,8 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
+			newEntry := map[string]string{client.id: client.secret}
+			h.broadcastKeys = append(h.broadcastKeys, newEntry)
 			h.clients[client] = true
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {

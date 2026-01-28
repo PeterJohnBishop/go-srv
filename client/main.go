@@ -4,20 +4,47 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math/rand/v2"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/xlzd/gotp"
 )
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func generateUserID() string {
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = charset[rand.IntN(len(charset))]
+	}
+	return string(b)
+}
 
 func main() {
 
-	u := url.URL{Scheme: "ws", Host: "localhost:8080", Path: "/ws"}
+	var displayName = "testClient1"
+	path := fmt.Sprintf("/ws/%s", displayName)
+
+	var id = generateUserID()
+
+	secretLength := 16
+	var secret = gotp.RandomSecret(secretLength)
+
+	// save userId and secret to a database
+
+	headers := http.Header{}
+	headers.Add("X-Client-Id", id)
+	headers.Add("X-Client-Secret", secret)
+
+	u := url.URL{Scheme: "ws", Host: "localhost:8080", Path: path}
 	log.Printf("connecting to %s", u.String())
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
