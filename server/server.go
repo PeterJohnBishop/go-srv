@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"go-crypt/server/integrations"
 	"go-crypt/server/websockets"
 	"log"
 	"os"
@@ -65,6 +66,7 @@ func ServeGin() {
 	r.GET("/ws", func(c *gin.Context) {
 		websockets.ServeWs(hub, c)
 	})
+	integrations.AddGitHubRoutes(r)
 
 	log.Printf("Serving Gin at :%s", appPort)
 	r.Run(":" + appPort)
