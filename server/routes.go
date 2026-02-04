@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"go-crypt/server/sqldb"
+	"go-crypt/server/webhook"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,6 +13,9 @@ func addOpenRoutes(r *gin.Engine, db *sql.DB) {
 		c.JSON(200, gin.H{
 			"message": "go-svr",
 		})
+	})
+	r.POST("/webhook", func(c *gin.Context) {
+		webhook.HandleWebhook(c)
 	})
 	r.POST("auth/login", func(c *gin.Context) {
 		sqldb.Login(db, c)
