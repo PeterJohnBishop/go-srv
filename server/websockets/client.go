@@ -3,6 +3,8 @@ package websockets
 import (
 	"bytes"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +33,24 @@ var (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	// The "CORS" check for WebSockets happens here
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+
+		// 1. Allow no origin (common for non-browser clients like mobile apps)
+		if origin == "" {
+			return true
+		}
+
+		// 2. Allow your specific origins (Dynamic Localhost + GitHub)
+		if strings.HasPrefix(origin, "http://localhost") ||
+			strings.HasPrefix(origin, "http://127.0.0.1") ||
+			origin == "https://github.com" {
+			return true
+		}
+
+		return false
+	},
 }
 
 type Client struct {

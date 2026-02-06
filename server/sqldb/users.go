@@ -43,7 +43,7 @@ func CreateUsersTable(db *sql.DB) error {
 
 func GenerateUserID(email string) string {
 	hash := sha256.Sum256([]byte(email))
-	return fmt.Sprintf("user_%d", binary.BigEndian.Uint64(hash[:8]))
+	return fmt.Sprintf("u_%d", binary.BigEndian.Uint64(hash[:8]))
 }
 
 func HashedPassword(password string) (string, error) {
